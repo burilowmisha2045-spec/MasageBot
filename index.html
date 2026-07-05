@@ -163,7 +163,6 @@
     border:1.5px solid var(--yellow-deep);
     display:flex;align-items:center;justify-content:center;
     cursor:pointer;
-    overflow:hidden;
     background:linear-gradient(90deg, #ffffff 0 var(--split), var(--yellow-soft) var(--split) 100%);
   }
   .capsule::before{
@@ -290,6 +289,19 @@
 
   .loading-note{font-size:13px;color:var(--gray-text);text-align:center;padding:20px 0;}
 
+  .admin-panel{
+    position:fixed;bottom:0;left:0;right:0;
+    background:var(--ink);color:#fff;
+    padding:12px 18px;
+    display:flex;justify-content:center;z-index:90;
+  }
+  .admin-inner{
+    display:flex;align-items:center;gap:14px;
+    max-width:460px;width:100%;justify-content:space-between;
+    font-size:13px;
+  }
+  .admin-panel .btn-danger{flex:none;padding:9px 14px;font-size:13px;}
+
   /* =========================================================
      RESPONSIVE — ПК: контент собирается в карточку по центру
   ========================================================= */
@@ -370,7 +382,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="#D99A00" stroke-width="1.6"><path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12Z"/><path d="M4 21.5c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
       </div>
       <div class="hero-text">
-        <h1 id="masterName">Дмитрий Олегович</h1>
+        <h1 id="masterName">Алексей Волков</h1>
         <div class="hero-role">Массажист · медицинский и спортивный массаж</div>
         <p class="hero-desc" id="masterDesc">Работаю с болью в спине и шее, восстановлением после травм, мышечными зажимами
           и общим расслаблением. Индивидуально подбираю технику под ваш запрос — от глубокой проработки до мягкого релакса.</p>
@@ -438,6 +450,7 @@
       <div class="gender-row" id="genderRow">
         <div class="gender-opt" data-val="Женский">Женский</div>
         <div class="gender-opt" data-val="Мужской">Мужской</div>
+        <div class="gender-opt" data-val="Другое">Другое</div>
       </div>
       <div class="error-text">Выберите вариант</div>
     </div>
@@ -480,7 +493,29 @@
   </div>
 </div>
 
+<!-- ================= REPLACE BOOKING CONFIRM MODAL ================= -->
+<div class="overlay overlay-center" id="replaceOverlay">
+  <div class="modal modal-rounded">
+    <h3>Вы точно хотите перезаписаться?</h3>
+    <div class="modal-sub" id="replaceExplain">Ваша текущая запись на 4 июля, 12:00–13:00 будет удалена, вместо неё оформится новая.</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelReplace">Отмена</button>
+      <button class="btn btn-primary" id="confirmReplace">Да, перезаписаться</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
+<!-- Скрытая панель для мастера: откройте страницу с #admin в адресе,
+     чтобы получить кнопку очистки тестовых/всех записей. Обычным
+     посетителям эта панель не видна и никак не мешает. -->
+<div class="admin-panel" id="adminPanel" style="display:none;">
+  <div class="admin-inner">
+    <span>Режим мастера</span>
+    <button class="btn btn-danger" id="adminClearBtn" type="button">Очистить все записи</button>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -489,17 +524,17 @@
      CONFIG — здесь легко поменять данные под себя
   ========================================================= */
   const CONFIG = {
-    name: "Дмитрий Олегович",
+    name: "Алексей Волков",
     description: "Работаю с болью в спине и шее, восстановлением после травм, мышечными зажимами и общим расслаблением. Индивидуально подбираю технику под ваш запрос — от глубокой проработки до мягкого релакса.",
     specialties: ["Спина и шея", "Спортивные травмы", "Реабилитация", "Релакс-массаж", "Работа с зажимами"],
-    phone: "+7 991 922 2756",
-    telegram: "https://t.me/krasovskiy_dmitriy",
+    phone: "+7 900 123-45-67",
+    telegram: "https://t.me/your_username",
     price: 2500,
     // рабочее время в минутах от начала суток
     startMin: 12*60,      // 12:00
     endMin: 20*60+30,      // 20:30 — последний сеанс должен закончиться до этого времени
     sessionMin: 60,        // длительность сеанса
-    gapMin: 30,            // перерыв между сеансами
+    gapMin: 15,            // перерыв между сеансами
     offWeekdays: []        // выходные дни недели, 0=Вс,1=Пн,...6=Сб. Например [0] — воскресенье выходной
   };
 
@@ -512,6 +547,7 @@
   let viewYear, viewMonth;  // текущий отображаемый месяц (0-индекс month)
   let selectedDate = null;  // "YYYY-MM-DD"
   let pendingSlot = null;   // {date, start, end} для модалки записи
+  let pendingReplaceKey = null; // ключ старой записи клиента, которая будет удалена при перезаписи
   let openMyKey = null;     // ключ открытой "моей" записи
 
   const todayObj = new Date();
@@ -583,7 +619,7 @@
       if (!r){ storageOk = false; }
     }catch(e){
       storageOk = false;
-      showToast('Не удалось сохранить запись, попробуйте еще раз');
+      showToast('Не удалось сохранить запись на сервере — она видна только в этой сессии');
     }
   }
 
@@ -708,7 +744,17 @@
       el.addEventListener('click', ()=>{
         const key = el.getAttribute('data-key');
         const kind = el.getAttribute('data-kind');
-        if (kind === 'free'){ closeSlotsModal(); openBookingModal(key); }
+        if (kind === 'free'){
+          const existingKey = findMyBookingKey();
+          if (existingKey){
+            closeSlotsModal();
+            openReplaceConfirm(key, existingKey);
+          } else {
+            pendingReplaceKey = null;
+            closeSlotsModal();
+            openBookingModal(key);
+          }
+        }
         else if (kind === 'mine'){ closeSlotsModal(); openMyBookingModal(key); }
       });
     });
@@ -740,6 +786,34 @@
     return d + " " + MONTHS[m-1] + ", " + timePart + "–" + endLabel;
   }
 
+  function findMyBookingKey(){
+    return Object.keys(bookings).find(k => bookings[k] && bookings[k].clientId === clientId) || null;
+  }
+
+  /* ---------- окно подтверждения перезаписи ---------- */
+  function openReplaceConfirm(newKey, oldKey){
+    pendingReplaceKey = oldKey;
+    document.getElementById('replaceExplain').textContent =
+      "Ваша текущая запись на " + keyToLabel(oldKey) + " будет удалена, вместо неё оформится новая на " + keyToLabel(newKey) + ".";
+    document.getElementById('replaceOverlay').dataset.newKey = newKey;
+    document.getElementById('replaceOverlay').classList.add('open');
+  }
+  function closeReplaceConfirm(){
+    document.getElementById('replaceOverlay').classList.remove('open');
+  }
+  document.getElementById('cancelReplace').addEventListener('click', ()=>{
+    pendingReplaceKey = null;
+    closeReplaceConfirm();
+  });
+  document.getElementById('replaceOverlay').addEventListener('click', (e)=>{
+    if (e.target.id === 'replaceOverlay'){ pendingReplaceKey = null; closeReplaceConfirm(); }
+  });
+  document.getElementById('confirmReplace').addEventListener('click', ()=>{
+    const newKey = document.getElementById('replaceOverlay').dataset.newKey;
+    closeReplaceConfirm();
+    openBookingModal(newKey); // pendingReplaceKey остаётся установленным и будет использован при сохранении
+  });
+
   function openBookingModal(key){
     pendingSlot = key;
     selectedGender = null;
@@ -753,6 +827,7 @@
   function closeBookingModal(){
     document.getElementById('bookOverlay').classList.remove('open');
     pendingSlot = null;
+    pendingReplaceKey = null;
   }
 
   document.getElementById('genderRow').addEventListener('click', (e)=>{
@@ -793,6 +868,12 @@
       renderCalendar();
       return;
     }
+
+    // если это перезапись — удаляем старую запись этого же клиента
+    if (pendingReplaceKey && bookings[pendingReplaceKey] && bookings[pendingReplaceKey].clientId === clientId){
+      delete bookings[pendingReplaceKey];
+    }
+    pendingReplaceKey = null;
 
     bookings[pendingSlot] = {
       clientId,
@@ -870,6 +951,24 @@
   });
 
   /* =========================================================
+     ADMIN — скрытая очистка записей, доступна по адресу страницы + #admin
+  ========================================================= */
+  function initAdminPanel(){
+    if (window.location.hash !== '#admin') return;
+    document.getElementById('adminPanel').style.display = 'flex';
+    document.body.style.paddingBottom = '76px';
+    document.getElementById('adminClearBtn').addEventListener('click', async ()=>{
+      const sure = window.confirm('Удалить абсолютно все записи (включая тестовые)? Это нельзя отменить.');
+      if (!sure) return;
+      bookings = {};
+      await saveBookings();
+      selectedDate = null;
+      renderCalendar();
+      showToast('Все записи удалены');
+    });
+  }
+
+  /* =========================================================
      INIT
   ========================================================= */
   async function init(){
@@ -877,6 +976,7 @@
     await initClientId();
     await loadBookings();
     renderCalendar();
+    initAdminPanel();
 
     // лёгкий поллинг, чтобы видеть новые записи других посетителей
     setInterval(async ()=>{
