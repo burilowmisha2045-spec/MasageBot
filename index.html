@@ -383,7 +383,7 @@
       </div>
       <div class="hero-text">
         <h1 id="masterName">Алексей Волков</h1>
-        <div class="hero-role">Массажист · медицинский и спортивный массаж</div>
+        <div class="hero-role">Массажист · лечебный и спортивный массаж</div>
         <p class="hero-desc" id="masterDesc">Работаю с болью в спине и шее, восстановлением после травм, мышечными зажимами
           и общим расслаблением. Индивидуально подбираю технику под ваш запрос — от глубокой проработки до мягкого релакса.</p>
         <div class="chips" id="specChips"></div>
@@ -402,7 +402,7 @@
   <!-- ================= CALENDAR ================= -->
   <section class="cal-section">
     <div class="cal-title">Запись на приём</div>
-    <div class="cal-sub">Выберите свободный день, затем удобное время.</div>
+    <div class="cal-sub" id="calSub">Выберите свободный день, затем удобное время.</div>
 
     <div class="cal-nav">
       <button class="nav-btn" id="prevMonth" aria-label="Предыдущий месяц">
@@ -450,7 +450,6 @@
       <div class="gender-row" id="genderRow">
         <div class="gender-opt" data-val="Женский">Женский</div>
         <div class="gender-opt" data-val="Мужской">Мужской</div>
-        
       </div>
       <div class="error-text">Выберите вариант</div>
     </div>
@@ -461,9 +460,15 @@
       <div class="error-text">Укажите возраст от 1 до 120</div>
     </div>
 
+    <div class="field" id="fDuration">
+      <label>Длительность и стоимость</label>
+      <div class="gender-row" id="durationRow"></div>
+      <div class="error-text">Выберите вариант</div>
+    </div>
+
     <div class="price-box">
       <div class="label">К оплате за сеанс</div>
-      <div class="amount mono" id="priceLabel">2500 ₽</div>
+      <div class="amount mono" id="priceLabel">—</div>
     </div>
 
     <div class="modal-actions">
@@ -483,7 +488,7 @@
 
     <div class="price-box">
       <div class="label">К оплате за сеанс</div>
-      <div class="amount mono" id="myPriceLabel">2500 ₽</div>
+      <div class="amount mono" id="myPriceLabel">—</div>
     </div>
 
     <div class="modal-actions">
@@ -497,7 +502,7 @@
 <div class="overlay overlay-center" id="replaceOverlay">
   <div class="modal modal-rounded">
     <h3>Вы точно хотите перезаписаться?</h3>
-    <div class="modal-sub" id="replaceExplain">Ваша текущая запись будет удалена, вместо неё оформится новая.</div>
+    <div class="modal-sub" id="replaceExplain">Ваша текущая запись на 4 июля, 12:00–13:00 будет удалена, вместо неё оформится новая.</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="cancelReplace">Отмена</button>
       <button class="btn btn-primary" id="confirmReplace">Да, перезаписаться</button>
@@ -529,13 +534,24 @@
     specialties: ["Спина и шея", "Спортивные травмы", "Реабилитация", "Релакс-массаж", "Работа с зажимами"],
     phone: "+7 991 922 2756",
     telegram: "https://t.me/krasovskiy_dmitriy",
-    price: 2500,
-    // рабочее время в минутах от начала суток
-    startMin: 12*60,      // 12:00
-    endMin: 20*60+30,      // 20:30 — последний сеанс должен закончиться до этого времени
-    sessionMin: 60,        // длительность сеанса
-    gapMin: 30,            // перерыв между сеансами
-    offWeekdays: [0, 6]       // выходные дни недели, 0=Вс,1=Пн,...6=Сб. Например [0] — воскресенье выходной
+
+    // варианты длительности и стоимости сеанса — клиент выбирает при записи
+    durations: [
+      { label: "1 час", minutes: 60, price: 2500 },
+      { label: "45 минут", minutes: 45, price: 2000 }
+    ],
+
+    // рабочие дни недели: 0=Вс, 1=Пн, 2=Вт, 3=Ср, 4=Чт, 5=Пт, 6=Сб
+    workWeekdays: [0, 2, 4], // воскресенье, вторник, четверг
+
+    // рабочее время в минутах от начала суток — отдельно для воскресенья и остальных дней
+    hoursDefault: { start: 15*60+30, end: 20*60+30 }, // вт/чт: 15:30–20:30
+    hoursSunday:  { start: 13*60,    end: 20*60+30 }, // вс: 13:00–20:30
+
+    // максимальная длительность приёма для расчёта сетки времени (чтобы слоты не пересекались
+    // независимо от того, выберет ли клиент 45 минут или 1 час)
+    sessionMin: 60,
+    gapMin: 15             // перерыв между сеансами, мин
   };
 
   /* =========================================================
@@ -568,16 +584,29 @@
     const h = Math.floor(m/60), mi = m%60;
     return pad(h)+":"+pad(mi);
   }
-  function genSlots(){
+  function genSlots(startMin, endMin){
     const slots = [];
-    let t = CONFIG.startMin;
-    while (t + CONFIG.sessionMin <= CONFIG.endMin){
+    let t = startMin;
+    while (t + CONFIG.sessionMin <= endMin){
       slots.push({ start:t, end:t+CONFIG.sessionMin });
       t += CONFIG.sessionMin + CONFIG.gapMin;
     }
     return slots;
   }
-  const SLOTS = genSlots();
+
+  function isWorkWeekday(wd){
+    return CONFIG.workWeekdays.includes(wd);
+  }
+
+  const slotsCache = {};
+  function getSlotsForWeekday(wd){
+    if (!isWorkWeekday(wd)) return [];
+    if (slotsCache[wd]) return slotsCache[wd];
+    const hours = (wd === 0) ? CONFIG.hoursSunday : CONFIG.hoursDefault;
+    const result = genSlots(hours.start, hours.end);
+    slotsCache[wd] = result;
+    return result;
+  }
 
   function uid(){
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -619,7 +648,7 @@
       if (!r){ storageOk = false; }
     }catch(e){
       storageOk = false;
-      showToast('Не удалось сохранить запись на сервере — она видна только в этой сессии');
+      showToast('Не удалось сохранить запись, попробуйте позже');
     }
   }
 
@@ -629,11 +658,14 @@
   function renderStatic(){
     document.getElementById('masterName').textContent = CONFIG.name;
     document.getElementById('masterDesc').textContent = CONFIG.description;
-    document.getElementById('priceLabel').textContent = CONFIG.price + " ₽";
-    document.getElementById('myPriceLabel').textContent = CONFIG.price + " ₽";
 
     const chipsBox = document.getElementById('specChips');
     chipsBox.innerHTML = CONFIG.specialties.map(s=>`<span class="chip">${s}</span>`).join('');
+
+    document.getElementById('calSub').textContent =
+      "Приём по вторникам и четвергам с 15:30 до 20:30, по воскресеньям с 13:00 до 20:30.";
+
+    renderDurationOptions();
 
     const contacts = document.getElementById('contacts');
     contacts.innerHTML = `
@@ -652,15 +684,16 @@
      RENDER: CALENDAR
   ========================================================= */
   function dayStatus(y,m,d){
-    // -1 disabled(past), 0 full(occupied), 1 free
+    // -1 disabled(past/выходной), 0 full(occupied), 1 free
     const dObj = new Date(y,m,d); dObj.setHours(0,0,0,0);
     if (dObj < todayObj) return -1;
     const wd = dObj.getDay();
-    if (CONFIG.offWeekdays.includes(wd)) return -1;
+    if (!isWorkWeekday(wd)) return -1;
+    const daySlots = getSlotsForWeekday(wd);
     const key = dateKey(y,m,d);
     const isToday = dObj.getTime() === todayObj.getTime();
     let freeCount = 0;
-    for (const s of SLOTS){
+    for (const s of daySlots){
       if (isToday && s.start <= (todayObj.getHours()*60+todayObj.getMinutes())) continue; // прошедшее время сегодня считаем недоступным
       const k = key+"_"+minutesToLabel(s.start);
       if (!bookings[k]) freeCount++;
@@ -714,15 +747,17 @@
 
   function openSlotsModal(dateKey){
     const [y,m,d] = dateKey.split('-').map(Number);
+    const wd = new Date(y, m-1, d).getDay();
     const isToday = (y===todayObj.getFullYear() && (m-1)===todayObj.getMonth() && d===todayObj.getDate());
     const nowMin = todayObj.getHours()*60 + todayObj.getMinutes();
+    const daySlots = getSlotsForWeekday(wd);
 
     const dateLabel = d + " " + MONTHS[m-1] + (y!==todayObj.getFullYear() ? ", "+y : "");
     document.getElementById('slotsDateLabel').textContent = dateLabel;
 
     let chips = '';
     let anyVisible = false;
-    for (const s of SLOTS){
+    for (const s of daySlots){
       if (isToday && s.start <= nowMin) continue;
       anyVisible = true;
       const k = dateKey + "_" + minutesToLabel(s.start);
@@ -777,11 +812,20 @@
      BOOKING MODAL
   ========================================================= */
   let selectedGender = null;
+  let selectedDuration = null;
+
+  function renderDurationOptions(){
+    const row = document.getElementById('durationRow');
+    row.innerHTML = CONFIG.durations.map((d,idx)=>
+      `<div class="gender-opt" data-idx="${idx}">${d.label}<br>${d.price} ₽</div>`
+    ).join('');
+  }
 
   function keyToLabel(key){
     const [datePart, timePart] = key.split('_');
     const [y,m,d] = datePart.split('-').map(Number);
-    const slot = SLOTS.find(s => minutesToLabel(s.start) === timePart);
+    const wd = new Date(y, m-1, d).getDay();
+    const slot = getSlotsForWeekday(wd).find(s => minutesToLabel(s.start) === timePart);
     const endLabel = slot ? minutesToLabel(slot.end) : '';
     return d + " " + MONTHS[m-1] + ", " + timePart + "–" + endLabel;
   }
@@ -817,10 +861,12 @@
   function openBookingModal(key){
     pendingSlot = key;
     selectedGender = null;
+    selectedDuration = null;
     document.getElementById('inputProblem').value = '';
     document.getElementById('inputAge').value = '';
     document.querySelectorAll('.gender-opt').forEach(el=>el.classList.remove('active'));
-    ['fProblem','fGender','fAge'].forEach(id=>document.getElementById(id).classList.remove('invalid'));
+    document.getElementById('priceLabel').textContent = '—';
+    ['fProblem','fGender','fAge','fDuration'].forEach(id=>document.getElementById(id).classList.remove('invalid'));
     document.getElementById('bookSubtitle').textContent = keyToLabel(key);
     document.getElementById('bookOverlay').classList.add('open');
   }
@@ -833,10 +879,21 @@
   document.getElementById('genderRow').addEventListener('click', (e)=>{
     const opt = e.target.closest('.gender-opt');
     if (!opt) return;
-    document.querySelectorAll('.gender-opt').forEach(el=>el.classList.remove('active'));
+    document.querySelectorAll('#genderRow .gender-opt').forEach(el=>el.classList.remove('active'));
     opt.classList.add('active');
     selectedGender = opt.getAttribute('data-val');
     document.getElementById('fGender').classList.remove('invalid');
+  });
+
+  document.getElementById('durationRow').addEventListener('click', (e)=>{
+    const opt = e.target.closest('.gender-opt');
+    if (!opt) return;
+    document.querySelectorAll('#durationRow .gender-opt').forEach(el=>el.classList.remove('active'));
+    opt.classList.add('active');
+    const idx = Number(opt.getAttribute('data-idx'));
+    selectedDuration = CONFIG.durations[idx];
+    document.getElementById('priceLabel').textContent = selectedDuration.price + " ₽";
+    document.getElementById('fDuration').classList.remove('invalid');
   });
 
   document.getElementById('cancelBook').addEventListener('click', closeBookingModal);
@@ -857,6 +914,8 @@
     const ageNum = Number(age);
     if (!age || ageNum < 1 || ageNum > 120){ document.getElementById('fAge').classList.add('invalid'); ok=false; }
     else document.getElementById('fAge').classList.remove('invalid');
+
+    if (!selectedDuration){ document.getElementById('fDuration').classList.add('invalid'); ok=false; }
 
     if (!ok) return;
 
@@ -880,7 +939,9 @@
       problem,
       gender: selectedGender,
       age: ageNum,
-      price: CONFIG.price,
+      durationLabel: selectedDuration.label,
+      durationMinutes: selectedDuration.minutes,
+      price: selectedDuration.price,
       createdAt: Date.now()
     };
 
@@ -907,7 +968,9 @@
       <div class="my-detail-row"><span>Проблема</span><span>${escapeHtml(b.problem)}</span></div>
       <div class="my-detail-row"><span>Пол</span><span>${escapeHtml(b.gender)}</span></div>
       <div class="my-detail-row"><span>Возраст</span><span>${escapeHtml(String(b.age))}</span></div>
+      <div class="my-detail-row"><span>Длительность</span><span>${escapeHtml(b.durationLabel || '')}</span></div>
     `;
+    document.getElementById('myPriceLabel').textContent = (b.price || 0) + " ₽";
     document.getElementById('myOverlay').classList.add('open');
   }
   function closeMyModal(){
