@@ -450,14 +450,14 @@
       <div class="gender-row" id="genderRow">
         <div class="gender-opt" data-val="Женский">Женский</div>
         <div class="gender-opt" data-val="Мужской">Мужской</div>
-        <div class="gender-opt" data-val="Другое">Другое</div>
+        
       </div>
       <div class="error-text">Выберите вариант</div>
     </div>
 
     <div class="field" id="fAge">
       <label>Возраст</label>
-      <input type="number" id="inputAge" min="1" max="120" placeholder="Например, 32">
+      <input type="number" id="inputAge" min="1" max="120" placeholder="Ваш возраст">
       <div class="error-text">Укажите возраст от 1 до 120</div>
     </div>
 
@@ -497,7 +497,7 @@
 <div class="overlay overlay-center" id="replaceOverlay">
   <div class="modal modal-rounded">
     <h3>Вы точно хотите перезаписаться?</h3>
-    <div class="modal-sub" id="replaceExplain">Ваша текущая запись на 4 июля, 12:00–13:00 будет удалена, вместо неё оформится новая.</div>
+    <div class="modal-sub" id="replaceExplain">Ваша текущая запись будет удалена, вместо неё оформится новая.</div>
     <div class="modal-actions">
       <button class="btn btn-secondary" id="cancelReplace">Отмена</button>
       <button class="btn btn-primary" id="confirmReplace">Да, перезаписаться</button>
@@ -524,18 +524,18 @@
      CONFIG — здесь легко поменять данные под себя
   ========================================================= */
   const CONFIG = {
-    name: "Алексей Волков",
+    name: "Дмитрий Олегович",
     description: "Работаю с болью в спине и шее, восстановлением после травм, мышечными зажимами и общим расслаблением. Индивидуально подбираю технику под ваш запрос — от глубокой проработки до мягкого релакса.",
     specialties: ["Спина и шея", "Спортивные травмы", "Реабилитация", "Релакс-массаж", "Работа с зажимами"],
-    phone: "+7 900 123-45-67",
-    telegram: "https://t.me/your_username",
+    phone: "+7 991 922 2756",
+    telegram: "https://t.me/krasovskiy_dmitriy",
     price: 2500,
     // рабочее время в минутах от начала суток
     startMin: 12*60,      // 12:00
     endMin: 20*60+30,      // 20:30 — последний сеанс должен закончиться до этого времени
     sessionMin: 60,        // длительность сеанса
-    gapMin: 15,            // перерыв между сеансами
-    offWeekdays: []        // выходные дни недели, 0=Вс,1=Пн,...6=Сб. Например [0] — воскресенье выходной
+    gapMin: 30,            // перерыв между сеансами
+    offWeekdays: [0, 6]       // выходные дни недели, 0=Вс,1=Пн,...6=Сб. Например [0] — воскресенье выходной
   };
 
   /* =========================================================
